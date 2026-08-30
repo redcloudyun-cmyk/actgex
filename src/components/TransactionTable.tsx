@@ -6,6 +6,7 @@ import { useI18n } from '../i18n';
 import { useAppStore } from '../store/useAppStore';
 import { filterTransactions } from '../lib/aggregate';
 import { formatCurrency, formatDate } from '../lib/format';
+import { LocalizedDateInput } from './LocalizedDateInput';
 
 type SortKey = 'date' | 'amount';
 
@@ -61,18 +62,16 @@ export function TransactionTable() {
             </option>
           ))}
         </select>
-        <input
-          type="date"
-          value={filters.startDate ?? ''}
-          onChange={(e) => setFilters({ startDate: e.target.value || null })}
-          className="rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+        <LocalizedDateInput
+          value={filters.startDate}
+          onChange={(iso) => setFilters({ startDate: iso })}
+          aria-label={t('table.from')}
         />
         <span className="text-xs text-[var(--color-ink-soft)]">–</span>
-        <input
-          type="date"
-          value={filters.endDate ?? ''}
-          onChange={(e) => setFilters({ endDate: e.target.value || null })}
-          className="rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+        <LocalizedDateInput
+          value={filters.endDate}
+          onChange={(iso) => setFilters({ endDate: iso })}
+          aria-label={t('table.to')}
         />
         <button
           type="button"
