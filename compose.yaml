@@ -1,0 +1,14 @@
+name: actgex
+
+services:
+  actgex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: actgex-app
+
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:4000:80"
