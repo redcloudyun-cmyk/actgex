@@ -33,3 +33,35 @@ export function digitsToIso(digits: string, isKorean: boolean): string | null {
     : `${digits.slice(4, 8)}-${digits.slice(0, 2)}-${digits.slice(2, 4)}`;
   return isStrictISODate(iso) ? iso : null;
 }
+
+export function isoParts(iso: string): { year: number; month: number; day: number } {
+  const [y, m, d] = iso.split('-').map(Number);
+  return { year: y, month: m, day: d };
+}
+
+export function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Normalizes a (possibly out-of-range) month/year pair, e.g. month=13 → next January. */
+export function normalizeYearMonth(year: number, month: number): { year: number; month: number } {
+  const y = year + Math.floor((month - 1) / 12);
+  const m = ((((month - 1) % 12) + 12) % 12) + 1;
+  return { year: y, month: m };
+}
+
+export interface CalendarCell {
+  iso: string;
+  day: number;
+}
+
+/** One month's day grid for a picker, left-padded with `null` so day 1 lands under its real weekday (Sun-start). */
+export function buildMonthGrid(year: number, month: number): (CalendarCell | null)[] {
+  const startWeekday = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells: (CalendarCell | null)[] = new Array(startWeekday).fill(null);
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ iso: `${year}-${pad2(month)}-${pad2(day)}`, day });
+  }
+  return cells;
+}
