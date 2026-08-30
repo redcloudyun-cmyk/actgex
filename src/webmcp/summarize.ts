@@ -9,6 +9,16 @@ type T = (key: string, vars?: Record<string, string | number>) => string;
 export function summarizeEvent(event: ActivityEvent, t: T, locale: Locale, currency: string): string {
   const after = event.detail?.after as Record<string, unknown> | undefined;
 
+  if (event.status === 'FAILED' && after && 'error' in after) {
+    const error = after.error as { message: string; messageKey?: string };
+    return error.messageKey ? t(error.messageKey) : error.message;
+  }
+
+  if (event.status === 'REJECTED' && event.tool === 'set_budget_goal' && after) {
+    const category = t(categoryLabelKey(after.category as CategoryId));
+    return t('summary.rejected', { category });
+  }
+
   switch (event.tool) {
     case 'user_request':
       return String((event.params as { text?: string } | undefined)?.text ?? '');

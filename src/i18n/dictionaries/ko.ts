@@ -142,8 +142,19 @@ const ko: Dictionary = {
   'approval.waiting': '사용자 승인을 기다리고 있습니다.',
 
   'error.invalidDateRange': '선택한 기간이 올바르지 않습니다.',
+  'error.invalidDate': '올바른 날짜가 아닙니다.',
   'error.noData': '불러온 데이터가 없습니다.',
+  'error.invalidCategory': '알 수 없는 카테고리입니다.',
+  'error.invalidBudgetLimit': '예산은 0보다 큰 숫자여야 합니다.',
+  'error.invalidReductionPercent': '절감 비율은 0~100 사이의 숫자여야 합니다.',
+  'error.invalidMonthCount': '개월 수는 1~60 사이의 정수여야 합니다.',
+  'error.invalidAmountRange': '금액 범위가 올바르지 않습니다.',
   'error.unknown': '도구를 실행하는 중 문제가 발생했습니다.',
+
+  'status.webmcpRegistering': 'WebMCP 연결 중…',
+  'status.webmcpFailed': 'WebMCP 등록 실패',
+  'agent.source.webmcp': 'WebMCP 경유',
+  'agent.source.console': '데모 콘솔 경유',
 
   'common.loading': '불러오는 중…',
   'common.close': '닫기',
@@ -162,16 +173,20 @@ const ko: Dictionary = {
   'category.UTILITIES': '공과금',
   'category.OTHER': '기타',
 
+  'demo.suggestion.query': '지금 보고 있는 거래 내역을 보여줘.',
+  'demo.suggestion.summary': '카테고리별 지출을 요약해줘.',
   'demo.suggestion.compare': '이번 달 외식비를 지난달과 비교해줘.',
   'demo.suggestion.flag': '최근에 평소보다 많이 쓴 항목 있어?',
   'demo.suggestion.recommend': '외식비가 너무 많아. 적절한 예산을 추천하고 적용해줘.',
   'demo.suggestion.simulate': '외식비를 20% 줄이면 12월까지 얼마나 절약할 수 있어?',
+  'demo.suggestion.export': '이번 리포트를 CSV로 내보내줘.',
 
   'summary.categoriesCount': '{{count}}개 카테고리 · {{total}}',
   'summary.noneFlagged': '이상 지출이 발견되지 않았습니다',
   'summary.recommended': '월 {{amount}} 추천',
   'summary.estimatedSavings': '예상 절약액 {{amount}}',
   'summary.changed': '{{category}} 예산: {{before}} → {{after}}',
+  'summary.rejected': '거부됨 — {{category}} 예산이 변경되지 않았습니다',
   'summary.exported': '{{format}} 리포트 준비 완료',
   'summary.querySummary': '{{count}}건 · {{total}}',
 };

@@ -52,6 +52,9 @@ function EventRow({ event }: { event: ActivityEvent }) {
           </span>
         </div>
         {summary && <div className="mt-1 text-[var(--color-ink-soft)]">{summary}</div>}
+        <div className="mt-1 text-[10px] text-[var(--color-ink-soft)]/70">
+          {t(event.source === 'webmcp' ? 'agent.source.webmcp' : 'agent.source.console')}
+        </div>
       </div>
     </div>
   );

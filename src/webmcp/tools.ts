@@ -1,8 +1,17 @@
 import { CATEGORY_IDS, type CategoryId } from '../data/types';
 import { escapeSqlString, runQuery } from '../db/duckdb';
 import { calendarMonthRange, daysAgoISO, isValidDateRange, todayISO } from '../lib/dates';
+import { percentChange, simulateReduction } from '../lib/finance';
 import { useAppStore, waitForApproval } from '../store/useAppStore';
-import { invalidCategoryError, invalidDateRangeError, noDataError } from './errors';
+import {
+  invalidAmountRangeError,
+  invalidBudgetLimitError,
+  invalidCategoryError,
+  invalidDateRangeError,
+  invalidMonthCountError,
+  invalidReductionPercentError,
+  noDataError,
+} from './errors';
 
 function assertDataset() {
   if (!useAppStore.getState().datasetLoaded) throw noDataError();
@@ -12,6 +21,28 @@ function assertCategory(category: string | undefined): CategoryId | undefined {
   if (category === undefined || category === 'ALL') return undefined;
   if (!CATEGORY_IDS.includes(category as CategoryId)) throw invalidCategoryError(category);
   return category as CategoryId;
+}
+
+/**
+ * Human UI → Shared State → Agent Tool Context: when the agent doesn't name
+ * a category explicitly, fall back to whatever the human currently has
+ * selected in the dashboard filter, rather than defaulting to "everything".
+ * An explicit argument from the agent always wins.
+ */
+function resolveCategoryContext(input: string | undefined): CategoryId | undefined {
+  if (input !== undefined) return assertCategory(input);
+  const current = useAppStore.getState().filters.category;
+  return current === 'ALL' ? undefined : current;
+}
+
+/** Same shared-state fallback, for the date-range filter. */
+function resolveDateRangeContext(
+  startDate: string | undefined,
+  endDate: string | undefined,
+): { startDate?: string; endDate?: string } {
+  if (startDate || endDate) return { startDate, endDate };
+  const filters = useAppStore.getState().filters;
+  return { startDate: filters.startDate ?? undefined, endDate: filters.endDate ?? undefined };
 }
 
 function whereClause(opts: {
@@ -33,7 +64,7 @@ function whereClause(opts: {
 }
 
 // ---------------------------------------------------------------------------
-// query_transactions
+// query_transactions (read-only)
 // ---------------------------------------------------------------------------
 export interface QueryTransactionsArgs {
   category?: string;
@@ -45,10 +76,19 @@ export interface QueryTransactionsArgs {
 }
 
 export async function queryTransactions(args: QueryTransactionsArgs) {
+  if (
+    (args.minAmount !== undefined && (!Number.isFinite(args.minAmount) || args.minAmount < 0)) ||
+    (args.maxAmount !== undefined && (!Number.isFinite(args.maxAmount) || args.maxAmount < 0)) ||
+    (args.minAmount !== undefined && args.maxAmount !== undefined && args.minAmount > args.maxAmount)
+  ) {
+    throw invalidAmountRangeError();
+  }
+
   assertDataset();
-  if (!isValidDateRange(args.startDate, args.endDate)) throw invalidDateRangeError();
-  const category = assertCategory(args.category);
-  const where = whereClause({ ...args, category });
+  const category = resolveCategoryContext(args.category);
+  const { startDate, endDate } = resolveDateRangeContext(args.startDate, args.endDate);
+  if (!isValidDateRange(startDate, endDate)) throw invalidDateRangeError();
+  const where = whereClause({ ...args, category, startDate, endDate });
 
   const rows = await runQuery(
     `SELECT id, date, merchant, category, amount FROM transactions WHERE ${where} ORDER BY date DESC LIMIT 200`,
@@ -56,13 +96,6 @@ export async function queryTransactions(args: QueryTransactionsArgs) {
   const [agg] = await runQuery<{ count: number; total: number }>(
     `SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE ${where}`,
   );
-
-  useAppStore.getState().setFilters({
-    category: category ?? 'ALL',
-    startDate: args.startDate ?? null,
-    endDate: args.endDate ?? null,
-    search: args.search ?? '',
-  });
 
   return {
     count: agg?.count ?? 0,
@@ -73,7 +106,7 @@ export async function queryTransactions(args: QueryTransactionsArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// get_category_summary
+// get_category_summary (read-only)
 // ---------------------------------------------------------------------------
 export interface CategorySummaryArgs {
   startDate?: string;
@@ -82,8 +115,9 @@ export interface CategorySummaryArgs {
 
 export async function getCategorySummary(args: CategorySummaryArgs) {
   assertDataset();
-  if (!isValidDateRange(args.startDate, args.endDate)) throw invalidDateRangeError();
-  const where = whereClause(args);
+  const { startDate, endDate } = resolveDateRangeContext(args.startDate, args.endDate);
+  if (!isValidDateRange(startDate, endDate)) throw invalidDateRangeError();
+  const where = whereClause({ startDate, endDate });
 
   const rows = await runQuery<{ category: CategoryId; count: number; total: number; average: number }>(
     `SELECT category, COUNT(*) AS count, SUM(amount) AS total, AVG(amount) AS average
@@ -91,14 +125,9 @@ export async function getCategorySummary(args: CategorySummaryArgs) {
   );
   const grandTotal = rows.reduce((sum, r) => sum + r.total, 0);
 
-  useAppStore.getState().setFilters({
-    startDate: args.startDate ?? null,
-    endDate: args.endDate ?? null,
-  });
-
   return {
-    startDate: args.startDate ?? null,
-    endDate: args.endDate ?? null,
+    startDate: startDate ?? null,
+    endDate: endDate ?? null,
     grandTotal,
     categories: rows.map((r) => ({
       category: r.category,
@@ -111,7 +140,7 @@ export async function getCategorySummary(args: CategorySummaryArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// compare_spending_periods
+// compare_spending_periods (read-only)
 // ---------------------------------------------------------------------------
 export interface ComparePeriodsArgs {
   currentStartDate?: string;
@@ -123,7 +152,7 @@ export interface ComparePeriodsArgs {
 
 export async function compareSpendingPeriods(args: ComparePeriodsArgs) {
   assertDataset();
-  const category = assertCategory(args.category);
+  const category = resolveCategoryContext(args.category);
 
   let currentStartDate = args.currentStartDate;
   let currentEndDate = args.currentEndDate;
@@ -180,13 +209,7 @@ export async function compareSpendingPeriods(args: ComparePeriodsArgs) {
   const currentTotal = currentAgg?.total ?? 0;
   const previousTotal = previousAgg?.total ?? 0;
   const changeAmount = currentTotal - previousTotal;
-  const changePercent = previousTotal > 0 ? changeAmount / previousTotal : currentTotal > 0 ? 1 : 0;
-
-  useAppStore.getState().setFilters({
-    category: category ?? 'ALL',
-    startDate: currentStartDate,
-    endDate: currentEndDate,
-  });
+  const changePercent = percentChange(currentTotal, previousTotal);
 
   return {
     category: category ?? null,
@@ -204,7 +227,7 @@ export async function compareSpendingPeriods(args: ComparePeriodsArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// flag_unusual_spending
+// flag_unusual_spending (read-only)
 // ---------------------------------------------------------------------------
 export interface FlagUnusualArgs {
   threshold?: number;
@@ -243,7 +266,7 @@ export async function flagUnusualSpending(args: FlagUnusualArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// recommend_budget_goal
+// recommend_budget_goal (read-only)
 // ---------------------------------------------------------------------------
 export interface RecommendBudgetArgs {
   category: string;
@@ -272,7 +295,7 @@ export async function recommendBudgetGoal(args: RecommendBudgetArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// simulate_budget_change
+// simulate_budget_change (read-only)
 // ---------------------------------------------------------------------------
 export interface SimulateBudgetChangeArgs {
   category: string;
@@ -281,6 +304,13 @@ export interface SimulateBudgetChangeArgs {
 }
 
 export async function simulateBudgetChange(args: SimulateBudgetChangeArgs) {
+  if (!Number.isFinite(args.reductionPercent) || args.reductionPercent <= 0 || args.reductionPercent > 100) {
+    throw invalidReductionPercentError();
+  }
+  if (!Number.isInteger(args.months) || args.months < 1 || args.months > 60) {
+    throw invalidMonthCountError();
+  }
+
   assertDataset();
   const category = assertCategory(args.category);
   if (!category) throw invalidCategoryError(args.category);
@@ -290,8 +320,11 @@ export async function simulateBudgetChange(args: SimulateBudgetChangeArgs) {
     `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE category = '${category}' AND date >= DATE '${since}'`,
   );
   const currentMonthlyAverage = (row?.total ?? 0) / 3;
-  const targetMonthlySpend = currentMonthlyAverage * (1 - args.reductionPercent / 100);
-  const estimatedSavings = (currentMonthlyAverage - targetMonthlySpend) * args.months;
+  const { targetMonthlySpend, estimatedSavings } = simulateReduction(
+    currentMonthlyAverage,
+    args.reductionPercent,
+    args.months,
+  );
 
   return {
     category,
@@ -312,12 +345,13 @@ export interface SetBudgetGoalArgs {
 }
 
 export async function setBudgetGoal(args: SetBudgetGoalArgs, activityId: string) {
+  if (!Number.isFinite(args.monthlyLimit) || args.monthlyLimit <= 0) {
+    throw invalidBudgetLimitError();
+  }
+
   assertDataset();
   const category = assertCategory(args.category);
   if (!category) throw invalidCategoryError(args.category);
-  if (!(args.monthlyLimit > 0)) {
-    throw invalidCategoryError(args.category);
-  }
 
   const store = useAppStore.getState();
   store.updateActivity(activityId, { status: 'WAITING_APPROVAL' });
@@ -343,7 +377,7 @@ export async function setBudgetGoal(args: SetBudgetGoalArgs, activityId: string)
 }
 
 // ---------------------------------------------------------------------------
-// export_report
+// export_report (read-only)
 // ---------------------------------------------------------------------------
 export interface ExportReportArgs {
   format: 'markdown' | 'csv';

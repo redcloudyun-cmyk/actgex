@@ -47,10 +47,14 @@ export type ToolStatus =
   | 'COMPLETED'
   | 'FAILED';
 
+export type ActivitySource = 'webmcp' | 'console';
+
 export interface ActivityEvent {
   id: string;
   timestamp: number;
   actor: 'agent' | 'user';
+  /** Whether this call came through a real `document.modelContext` agent or the in-app fallback simulator. */
+  source: ActivitySource;
   tool: string;
   params?: Record<string, unknown>;
   status: ToolStatus;

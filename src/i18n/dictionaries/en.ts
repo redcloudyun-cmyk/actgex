@@ -140,8 +140,19 @@ const en = {
   'approval.waiting': 'Waiting for your approval.',
 
   'error.invalidDateRange': 'The selected date range is invalid.',
+  'error.invalidDate': 'That date is not valid.',
   'error.noData': 'No dataset is loaded yet.',
+  'error.invalidCategory': 'Unknown category.',
+  'error.invalidBudgetLimit': 'Budget must be a number greater than 0.',
+  'error.invalidReductionPercent': 'Reduction must be a number between 0 and 100.',
+  'error.invalidMonthCount': 'Months must be a whole number between 1 and 60.',
+  'error.invalidAmountRange': 'Amount range is invalid.',
   'error.unknown': 'Something went wrong running that tool.',
+
+  'status.webmcpRegistering': 'Connecting WebMCP…',
+  'status.webmcpFailed': 'WebMCP registration failed',
+  'agent.source.webmcp': 'via WebMCP',
+  'agent.source.console': 'via Demo Console',
 
   'common.loading': 'Loading…',
   'common.close': 'Close',
@@ -160,16 +171,20 @@ const en = {
   'category.UTILITIES': 'Utilities',
   'category.OTHER': 'Other',
 
+  'demo.suggestion.query': 'Show me the transactions I’m currently looking at.',
+  'demo.suggestion.summary': 'Summarize my spending by category.',
   'demo.suggestion.compare': 'Compare my dining spending this month with last month.',
   'demo.suggestion.flag': 'Did I spend unusually more on anything recently?',
   'demo.suggestion.recommend': 'Dining spending is too high — recommend and apply a new budget.',
   'demo.suggestion.simulate': 'If I cut dining spending by 20%, how much would I save by December?',
+  'demo.suggestion.export': 'Export this month’s report as CSV.',
 
   'summary.categoriesCount': '{{count}} categories · {{total}}',
   'summary.noneFlagged': 'No unusual spending detected',
   'summary.recommended': 'Recommended {{amount}}/mo',
   'summary.estimatedSavings': 'Est. savings {{amount}}',
   'summary.changed': '{{category}} budget: {{before}} → {{after}}',
+  'summary.rejected': 'Rejected — {{category}} budget left unchanged',
   'summary.exported': '{{format}} report ready',
   'summary.querySummary': '{{count}} results · {{total}}',
 };

@@ -1,5 +1,5 @@
-import { Bell, Plus, Search, User } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Bell, Loader2, Plus, Search, User } from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import wordmark from '../assets/actgex-wordmark.png';
 import { LOCALE_TO_CURRENCY, REGION_TO_LOCALE, useI18n, type Locale } from '../i18n';
@@ -9,8 +9,9 @@ import { loadTransactions } from '../db/duckdb';
 import { formatNumber } from '../lib/format';
 import { useOnClickOutside } from '../lib/useOnClickOutside';
 import type { Region } from '../data/types';
+import type { WebMcpStatus } from '../webmcp/status';
 
-export function Header({ webmcpConnected }: { webmcpConnected: boolean }) {
+export function Header({ webmcpStatus }: { webmcpStatus: WebMcpStatus }) {
   const { t, locale, setLocale } = useI18n();
   const { datasetLoaded, transactions, loadDataset, dbReady, filters, setFilters, pendingApproval } = useAppStore(
     useShallow((s) => ({
@@ -48,6 +49,7 @@ export function Header({ webmcpConnected }: { webmcpConnected: boolean }) {
       <div className="hidden items-center gap-2 pl-2 text-[11px] sm:flex">
         <StatusPill
           tone={dbReady ? 'neutral' : 'warning'}
+          icon={dbReady ? undefined : <Loader2 size={11} className="animate-spin" />}
           label={
             !dbReady
               ? t('status.dbInitializing')
@@ -57,8 +59,24 @@ export function Header({ webmcpConnected }: { webmcpConnected: boolean }) {
           }
         />
         <StatusPill
-          tone={webmcpConnected ? 'success' : 'neutral'}
-          label={webmcpConnected ? t('status.webmcpConnected') : t('status.webmcpUnavailable')}
+          tone={
+            webmcpStatus === 'CONNECTED'
+              ? 'success'
+              : webmcpStatus === 'FAILED'
+                ? 'danger'
+                : webmcpStatus === 'REGISTERING'
+                  ? 'warning'
+                  : 'neutral'
+          }
+          label={
+            webmcpStatus === 'CONNECTED'
+              ? t('status.webmcpConnected')
+              : webmcpStatus === 'REGISTERING'
+                ? t('status.webmcpRegistering')
+                : webmcpStatus === 'FAILED'
+                  ? t('status.webmcpFailed')
+                  : t('status.webmcpUnavailable')
+          }
           dot
         />
       </div>
@@ -156,24 +174,33 @@ function StatusPill({
   label,
   tone,
   dot,
+  icon,
 }: {
   label: string;
-  tone: 'neutral' | 'success' | 'warning';
+  tone: 'neutral' | 'success' | 'warning' | 'danger';
   dot?: boolean;
+  icon?: ReactNode;
 }) {
   const toneClasses =
     tone === 'success'
       ? 'bg-[var(--color-success-soft)] text-[var(--color-success)]'
       : tone === 'warning'
         ? 'bg-[var(--color-warning-soft)] text-[var(--color-warning)]'
-        : 'bg-[var(--color-bg)] text-[var(--color-ink-soft)]';
+        : tone === 'danger'
+          ? 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]'
+          : 'bg-[var(--color-bg)] text-[var(--color-ink-soft)]';
+  const dotClasses =
+    tone === 'success'
+      ? 'bg-[var(--color-success)]'
+      : tone === 'danger'
+        ? 'bg-[var(--color-danger)]'
+        : tone === 'warning'
+          ? 'bg-[var(--color-warning)]'
+          : 'bg-[var(--color-ink-soft)]';
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium ${toneClasses}`}>
-      {dot && (
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${tone === 'success' ? 'bg-[var(--color-success)]' : 'bg-[var(--color-ink-soft)]'}`}
-        />
-      )}
+      {icon}
+      {dot && <span className={`h-1.5 w-1.5 rounded-full ${dotClasses}`} />}
       {label}
     </span>
   );

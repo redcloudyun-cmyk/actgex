@@ -16,10 +16,11 @@ import { REPO_URL } from './config';
 import { getDb } from './db/duckdb';
 import { useAppStore } from './store/useAppStore';
 import { isWebMcpAvailable, registerWebMcpTools } from './webmcp/registerTools';
+import type { WebMcpStatus } from './webmcp/status';
 
 function App() {
   const setDbReady = useAppStore((s) => s.setDbReady);
-  const [webmcpConnected, setWebmcpConnected] = useState(false);
+  const [webmcpStatus, setWebmcpStatus] = useState<WebMcpStatus>('UNAVAILABLE');
 
   useEffect(() => {
     getDb()
@@ -28,25 +29,34 @@ function App() {
   }, [setDbReady]);
 
   useEffect(() => {
-    if (webmcpConnected) return;
-    const tryRegister = () => {
-      if (isWebMcpAvailable()) {
-        registerWebMcpTools();
-        setWebmcpConnected(true);
-        return true;
-      }
-      return false;
+    let cancelled = false;
+    let interval: number | undefined;
+
+    async function attempt() {
+      if (!isWebMcpAvailable()) return false;
+      if (interval !== undefined) window.clearInterval(interval);
+      setWebmcpStatus('REGISTERING');
+      const success = await registerWebMcpTools();
+      if (!cancelled) setWebmcpStatus(success ? 'CONNECTED' : 'FAILED');
+      return true;
+    }
+
+    attempt().then((found) => {
+      if (found || cancelled) return;
+      interval = window.setInterval(() => {
+        attempt();
+      }, 1000);
+    });
+
+    return () => {
+      cancelled = true;
+      if (interval !== undefined) window.clearInterval(interval);
     };
-    if (tryRegister()) return;
-    const interval = window.setInterval(() => {
-      if (tryRegister()) window.clearInterval(interval);
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [webmcpConnected]);
+  }, []);
 
   return (
     <div className="flex h-screen flex-col bg-[var(--color-bg)]">
-      <Header webmcpConnected={webmcpConnected} />
+      <Header webmcpStatus={webmcpStatus} />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar docsUrl={REPO_URL} />

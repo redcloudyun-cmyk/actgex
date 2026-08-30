@@ -1,0 +1,53 @@
+import { describe, expect, it } from 'vitest';
+import { generateDemoData } from './demoData';
+import { calendarMonthRange } from '../lib/dates';
+import { percentChange } from '../lib/finance';
+import type { Region } from './types';
+
+function diningMonthOverMonthChange(region: Region, referenceDate: Date): number {
+  const transactions = generateDemoData(region, referenceDate);
+  const [curStart, curEnd] = calendarMonthRange(0, referenceDate);
+  const [prevStart, prevEnd] = calendarMonthRange(1, referenceDate);
+
+  const sum = (start: string, end: string) =>
+    transactions
+      .filter((t) => t.category === 'DINING' && t.date >= start && t.date <= end)
+      .reduce((s, t) => s + t.amount, 0);
+
+  return percentChange(sum(curStart, curEnd), sum(prevStart, prevEnd));
+}
+
+describe('generateDemoData determinism', () => {
+  it('produces byte-identical output for the same region and reference date', () => {
+    const referenceDate = new Date('2026-08-30T12:00:00Z');
+    const a = generateDemoData('US', referenceDate);
+    const b = generateDemoData('US', referenceDate);
+    expect(a).toEqual(b);
+  });
+
+  it('produces the same transaction count for US and KR on a given reference date', () => {
+    const referenceDate = new Date('2026-08-30T12:00:00Z');
+    const us = generateDemoData('US', referenceDate);
+    const kr = generateDemoData('KR', referenceDate);
+    expect(us.length).toBeGreaterThan(0);
+    expect(kr.length).toBeGreaterThan(0);
+  });
+});
+
+describe('generateDemoData dining month-over-month story', () => {
+  // The generator deliberately pins this ratio (see demoData.ts) so the
+  // "compare_spending_periods" demo scenario is stable regardless of which
+  // day of the month it's actually run on.
+  const referenceDate = new Date('2026-08-30T12:00:00Z');
+  const tolerance = 0.02; // ±2%
+
+  it('US demo: dining increases ~29% vs. the previous month', () => {
+    expect(diningMonthOverMonthChange('US', referenceDate)).toBeGreaterThan(0.29 - tolerance);
+    expect(diningMonthOverMonthChange('US', referenceDate)).toBeLessThan(0.29 + tolerance);
+  });
+
+  it('KR demo: dining increases ~29% vs. the previous month', () => {
+    expect(diningMonthOverMonthChange('KR', referenceDate)).toBeGreaterThan(0.29 - tolerance);
+    expect(diningMonthOverMonthChange('KR', referenceDate)).toBeLessThan(0.29 + tolerance);
+  });
+});

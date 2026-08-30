@@ -25,10 +25,23 @@ export function calendarMonthRange(monthsAgo: number, from: Date = new Date()): 
   return [isoDate(start), isoDate(end)];
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Strict `YYYY-MM-DD` validation: rejects malformed strings, non-ISO formats
+ * (e.g. `08/30/2026`), and non-existent calendar dates (e.g. `2026-02-30`)
+ * — and, as a side effect, anything that isn't a clean date literal (SQL
+ * injection attempts included), since it never matches the regex.
+ */
+export function isStrictISODate(value: string): boolean {
+  if (!ISO_DATE_RE.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
 export function isValidDateRange(start: string | null | undefined, end: string | null | undefined): boolean {
+  if (start && !isStrictISODate(start)) return false;
+  if (end && !isStrictISODate(end)) return false;
   if (!start || !end) return true;
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return false;
-  return s.getTime() <= e.getTime();
+  return start <= end;
 }
