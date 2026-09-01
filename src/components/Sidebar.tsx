@@ -9,7 +9,7 @@ import {
   Sparkles,
   Wrench,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 
 const ITEMS = [
@@ -24,25 +24,36 @@ const ITEMS = [
 
 const SETTINGS_ITEM = { key: 'nav.settings', href: '#settings', icon: SettingsIcon } as const;
 
-const OBSERVED_IDS = [...ITEMS.map((item) => item.href.slice(1)), SETTINGS_ITEM.href.slice(1)];
+// #agents and #executions live inside the sticky right column, which
+// scrolls independently of <main> — their on-screen position barely moves
+// as the page scrolls, so they can't be tracked by scroll position at all.
+// Everything else follows the normal top-to-bottom reading flow.
+const STICKY_COLUMN_IDS = new Set(['agents', 'executions']);
+const MAIN_FLOW_IDS = [...ITEMS.map((item) => item.href.slice(1)), SETTINGS_ITEM.href.slice(1)].filter(
+  (id) => !STICKY_COLUMN_IDS.has(id),
+);
 
-const ANCHOR_OFFSET = 96; // px from the top of the scroll container, below the sticky header
+const PIN_COOLDOWN_MS = 700; // long enough for a clicked anchor's smooth-scroll jump to finish
 
 /**
  * Highlights whichever section is currently in view, instead of always
- * pinning "Overview". Picks whichever observed section's top is closest to
- * (but still above) the anchor line — not "walk in document order, stop at
- * the first that hasn't crossed yet", because a couple of these ids
- * (#agents, #executions) live inside the sticky right column, which scrolls
- * independently of <main>; their position barely changes as the page
- * scrolls, so a sequential/order-dependent check gets permanently stuck on
- * whichever left-column section came right before them. Order-independent
- * "closest qualifying top" sidesteps that entirely, and also naturally
- * activates the last section once it's scrolled into place (no bottom-side
- * margin to fail to cross, unlike an IntersectionObserver rootMargin).
+ * pinning "Overview". A section becomes active once it's scrolled up into
+ * the top ~25% of the scroll container — not the moment its very top edge
+ * touches the header — so the highlight changes as soon as a section is
+ * clearly the one on screen, rather than lagging a full section behind.
+ * Positions are computed relative to the scroll container's own content
+ * (via a getBoundingClientRect diff, not raw `offsetTop`, since `<main>`
+ * isn't a CSS-positioned ancestor and `offsetTop` would resolve against
+ * whatever positioned ancestor is instead), so they stay correct regardless
+ * of current scroll position.
+ *
+ * `pin(id)` lets a click on a sticky-column link (#agents/#executions, which
+ * can't be tracked by scroll position) force that item active immediately;
+ * normal scroll-tracking resumes on the next real scroll after the jump.
  */
-function useScrollSpy(ids: string[]): string {
-  const [activeId, setActiveId] = useState(ids[0]);
+function useScrollSpy(mainFlowIds: string[]): [string, (id: string) => void] {
+  const [activeId, setActiveId] = useState(mainFlowIds[0]);
+  const ignoreUntilRef = useRef(0);
 
   useEffect(() => {
     const scrollRoot = document.querySelector('main');
@@ -50,29 +61,33 @@ function useScrollSpy(ids: string[]): string {
 
     let ticking = false;
     function computeActive() {
+      ticking = false;
+      if (Date.now() < ignoreUntilRef.current) return;
+
       // Scrolled (essentially) to the bottom: always activate the last
-      // section, even if it never reaches the anchor line — e.g. because a
-      // taller sticky sibling column keeps the scrollable area longer than
-      // the last section's own position would otherwise suggest.
+      // section, even if it never reaches the activation line — e.g.
+      // because a taller sticky sibling column keeps the scrollable area
+      // longer than the last section's own position would suggest.
       if (scrollRoot!.scrollTop + scrollRoot!.clientHeight >= scrollRoot!.scrollHeight - 4) {
-        setActiveId(ids[ids.length - 1]);
-        ticking = false;
+        setActiveId(mainFlowIds[mainFlowIds.length - 1]);
         return;
       }
 
-      let best = ids[0];
-      let bestTop = -Infinity;
-      for (const id of ids) {
+      const containerTop = scrollRoot!.getBoundingClientRect().top;
+      const activationLine = scrollRoot!.scrollTop + Math.min(220, scrollRoot!.clientHeight * 0.25);
+
+      let best = mainFlowIds[0];
+      let bestOffset = -Infinity;
+      for (const id of mainFlowIds) {
         const el = document.getElementById(id);
         if (!el) continue;
-        const top = el.getBoundingClientRect().top;
-        if (top <= ANCHOR_OFFSET && top > bestTop) {
-          bestTop = top;
+        const sectionTop = el.getBoundingClientRect().top - containerTop + scrollRoot!.scrollTop;
+        if (sectionTop <= activationLine && sectionTop > bestOffset) {
+          bestOffset = sectionTop;
           best = id;
         }
       }
       setActiveId(best);
-      ticking = false;
     }
     function onScroll() {
       if (ticking) return;
@@ -87,32 +102,41 @@ function useScrollSpy(ids: string[]): string {
       scrollRoot.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [ids]);
+  }, [mainFlowIds]);
 
-  return activeId;
+  function pin(id: string) {
+    setActiveId(id);
+    ignoreUntilRef.current = Date.now() + PIN_COOLDOWN_MS;
+  }
+
+  return [activeId, pin];
 }
 
 export function Sidebar({ docsUrl }: { docsUrl: string }) {
   const { t } = useI18n();
-  const activeId = useScrollSpy(OBSERVED_IDS);
+  const [activeId, pin] = useScrollSpy(MAIN_FLOW_IDS);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] lg:flex">
       <nav className="flex-1 space-y-0.5 p-3 pt-4">
-        {ITEMS.map(({ key, href, icon: Icon }) => (
-          <a
-            key={key}
-            href={href}
-            className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeId === href.slice(1)
-                ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
-                : 'text-[var(--color-ink-soft)] hover:bg-[var(--color-bg)] hover:text-[var(--color-ink)]'
-            }`}
-          >
-            <Icon size={17} strokeWidth={2} />
-            {t(key)}
-          </a>
-        ))}
+        {ITEMS.map(({ key, href, icon: Icon }) => {
+          const id = href.slice(1);
+          return (
+            <a
+              key={key}
+              href={href}
+              onClick={STICKY_COLUMN_IDS.has(id) ? () => pin(id) : undefined}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                activeId === id
+                  ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
+                  : 'text-[var(--color-ink-soft)] hover:bg-[var(--color-bg)] hover:text-[var(--color-ink)]'
+              }`}
+            >
+              <Icon size={17} strokeWidth={2} />
+              {t(key)}
+            </a>
+          );
+        })}
       </nav>
 
       <div className="space-y-0.5 border-t border-[var(--color-border)] p-3">
