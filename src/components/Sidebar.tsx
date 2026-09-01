@@ -6,12 +6,14 @@ import {
   PlayCircle,
   Settings as SettingsIcon,
   ShieldCheck,
+  Sparkles,
   Wrench,
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 
 const ITEMS = [
   { key: 'nav.overview', href: '#overview', icon: Home },
+  { key: 'nav.mission', href: '#mission', icon: Sparkles },
   { key: 'nav.tools', href: '#tools', icon: Wrench },
   { key: 'nav.agents', href: '#agents', icon: Bot },
   { key: 'nav.executions', href: '#executions', icon: PlayCircle },

@@ -1,9 +1,17 @@
 import { ArrowRight, BookOpen } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { useAppStore } from '../store/useAppStore';
+import { runFinancialMission } from '../webmcp/mission';
 import { HeroDiagram } from './HeroDiagram';
 
 export function Hero({ docsUrl }: { docsUrl: string }) {
   const { t } = useI18n();
+  const datasetLoaded = useAppStore((s) => s.datasetLoaded);
+
+  function handleAnalyze() {
+    document.getElementById('mission')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    void runFinancialMission();
+  }
 
   return (
     <section
@@ -23,13 +31,15 @@ export function Hero({ docsUrl }: { docsUrl: string }) {
           {t('hero.subtitle')}
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <a
-            href="#agents"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+          <button
+            type="button"
+            disabled={!datasetLoaded}
+            onClick={handleAnalyze}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
           >
             {t('hero.startBuilding')}
             <ArrowRight size={16} />
-          </a>
+          </button>
           <a
             href={docsUrl}
             target="_blank"

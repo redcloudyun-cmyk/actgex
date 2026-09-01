@@ -27,6 +27,8 @@ interface RegionProfile {
   subscriptions: { merchant: string; amount: number; dayOfMonth: number }[];
   utilities: { merchant: string; amount: number; dayOfMonth: number }[];
   travel: { merchants: string[]; amountRange: [number, number] };
+  monthlyIncome: number;
+  budgets: Partial<Record<CategoryId, number>>;
 }
 
 const US_PROFILE: RegionProfile = {
@@ -83,6 +85,13 @@ const US_PROFILE: RegionProfile = {
     merchants: ['Delta Air Lines', 'Marriott', 'Airbnb'],
     amountRange: [180, 950],
   },
+  monthlyIncome: 6000,
+  budgets: {
+    DINING: 650,
+    GROCERY: 400,
+    SHOPPING: 300,
+    TRANSPORT: 150,
+  },
 };
 
 const KR_PROFILE: RegionProfile = {
@@ -138,6 +147,13 @@ const KR_PROFILE: RegionProfile = {
     merchants: ['대한항공', '여기어때', '에어비앤비'],
     amountRange: [150000, 900000],
   },
+  monthlyIncome: 7000000,
+  budgets: {
+    DINING: 750000,
+    GROCERY: 450000,
+    SHOPPING: 350000,
+    TRANSPORT: 180000,
+  },
 };
 
 function pick<T>(rng: () => number, arr: T[]): T {
@@ -150,6 +166,12 @@ function round(amount: number, currency: string): number {
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/** Starting budgets + income for a region's demo persona — seeded so the Agent Mission has an existing budget to recommend against. */
+export function getDemoProfile(region: Region): { budgets: Partial<Record<CategoryId, number>>; monthlyIncome: number } {
+  const profile = region === 'US' ? US_PROFILE : KR_PROFILE;
+  return { budgets: { ...profile.budgets }, monthlyIncome: profile.monthlyIncome };
 }
 
 export function generateDemoData(region: Region, referenceDate: Date = new Date()): Transaction[] {
@@ -256,6 +278,8 @@ export function generateDemoData(region: Region, referenceDate: Date = new Date(
 
   // Duplicate subscription charge anomaly: bill the first subscription twice
   // in the most recent full month to simulate an accidental double charge.
+  // (Runs before the flag_unusual_spending guarantee below, so that step
+  // also accounts for — and dampens — the ratio spike this creates.)
   const dup = profile.subscriptions[0];
   const dupDate = new Date(referenceDate);
   dupDate.setDate(dup.dayOfMonth + (dupDate.getDate() > dup.dayOfMonth ? 0 : -3));
@@ -266,6 +290,78 @@ export function generateDemoData(region: Region, referenceDate: Date = new Date(
     category: 'SUBSCRIPTION',
     amount: dup.amount,
   });
+
+  // Keep every category except DINING comfortably under
+  // `flag_unusual_spending`'s 1.3x anomaly threshold — including SUBSCRIPTION
+  // despite the intentional duplicate charge above, which stays visible as a
+  // one-off transaction (query_transactions, the transaction table) without
+  // competing for the category-level ranking. Low-volume categories
+  // (Entertainment, Health, Other) have so few transactions that random
+  // noise can otherwise swing their ratio above dining's by chance, sending
+  // the Agent Mission's recommendation down the wrong category. This only
+  // ever rescales a category's own trailing-30-day transactions relative to
+  // its own baseline — it never touches DINING, so it can't disturb the MoM
+  // pin above or the 90-day average `recommend_budget_goal` reads.
+  {
+    const flagRecentStart = isoDate(new Date(referenceDate.getTime() - 30 * 86400000));
+    const flagBaselineStart = isoDate(new Date(referenceDate.getTime() - 120 * 86400000));
+    const SAFE_RATIO_CAP = 1.15;
+
+    const presentCategories = [...new Set(transactions.map((t) => t.category))];
+    for (const cat of presentCategories) {
+      if (cat === 'DINING') continue;
+
+      let recent = 0;
+      let baseline = 0;
+      for (const t of transactions) {
+        if (t.category !== cat) continue;
+        if (t.date >= flagRecentStart) recent += t.amount;
+        else if (t.date >= flagBaselineStart) baseline += t.amount;
+      }
+      if (recent <= 0) continue;
+      const baselineAvgMonthly = baseline / 3;
+      const ratio = baselineAvgMonthly > 0 ? recent / baselineAvgMonthly : Infinity;
+      if (ratio <= SAFE_RATIO_CAP) continue;
+
+      const targetRecent = baselineAvgMonthly * SAFE_RATIO_CAP;
+      const scale = targetRecent / recent;
+      const indexes = transactions
+        .map((_, i) => i)
+        .filter((i) => transactions[i].category === cat && transactions[i].date >= flagRecentStart);
+      for (const i of indexes) {
+        transactions[i] = { ...transactions[i], amount: round(transactions[i].amount * scale, profile.currency) };
+      }
+    }
+
+    // Fallback for early-in-the-month reference dates, where "this calendar
+    // month" (what the MoM pin above controls) barely overlaps the trailing
+    // 30-day window `flag_unusual_spending` actually reads, leaving dining's
+    // own recent total under-boosted. Only engages if dining still isn't
+    // clearly the top anomaly after dampening every other category; the
+    // target is modest (just clearing the threshold with a small margin,
+    // not chasing a competitive ratio) so any knock-on effect on
+    // `recommend_budget_goal`'s 90-day average stays proportionate.
+    let diningRecent = 0;
+    let diningBaseline = 0;
+    for (const t of transactions) {
+      if (t.category !== 'DINING') continue;
+      if (t.date >= flagRecentStart) diningRecent += t.amount;
+      else if (t.date >= flagBaselineStart) diningBaseline += t.amount;
+    }
+    const diningBaselineAvgMonthly = diningBaseline / 3;
+    const diningRatio = diningBaselineAvgMonthly > 0 ? diningRecent / diningBaselineAvgMonthly : Infinity;
+    const MODEST_TARGET = 1.35;
+    if (diningRatio < MODEST_TARGET && diningRecent > 0 && diningBaselineAvgMonthly > 0) {
+      const targetRecent = diningBaselineAvgMonthly * MODEST_TARGET;
+      const scale = targetRecent / diningRecent;
+      const diningRecentIndexes = transactions
+        .map((_, i) => i)
+        .filter((i) => transactions[i].category === 'DINING' && transactions[i].date >= flagRecentStart);
+      for (const i of diningRecentIndexes) {
+        transactions[i] = { ...transactions[i], amount: round(transactions[i].amount * scale, profile.currency) };
+      }
+    }
+  }
 
   transactions.sort((a, b) => a.date.localeCompare(b.date));
   return transactions;

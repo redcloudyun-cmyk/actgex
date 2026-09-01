@@ -1,10 +1,10 @@
-import { Bell, Loader2, Plus, Search, User } from 'lucide-react';
+import { Bell, Loader2, Plus, RotateCcw, Search, User } from 'lucide-react';
 import { useRef, useState, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import wordmark from '../assets/actgex-wordmark.png';
 import { LOCALE_TO_CURRENCY, REGION_TO_LOCALE, useI18n, type Locale } from '../i18n';
 import { useAppStore } from '../store/useAppStore';
-import { generateDemoData } from '../data/demoData';
+import { generateDemoData, getDemoProfile } from '../data/demoData';
 import { loadTransactions } from '../db/duckdb';
 import { formatNumber } from '../lib/format';
 import { useOnClickOutside } from '../lib/useOnClickOutside';
@@ -13,7 +13,18 @@ import type { WebMcpStatus } from '../webmcp/status';
 
 export function Header({ webmcpStatus }: { webmcpStatus: WebMcpStatus }) {
   const { t, locale, setLocale } = useI18n();
-  const { datasetLoaded, transactions, loadDataset, dbReady, filters, setFilters, pendingApproval } = useAppStore(
+  const {
+    datasetLoaded,
+    transactions,
+    loadDataset,
+    dbReady,
+    filters,
+    setFilters,
+    pendingApproval,
+    lastRegion,
+    agentAuthority,
+    setAgentAuthority,
+  } = useAppStore(
     useShallow((s) => ({
       datasetLoaded: s.datasetLoaded,
       transactions: s.transactions,
@@ -22,23 +33,42 @@ export function Header({ webmcpStatus }: { webmcpStatus: WebMcpStatus }) {
       filters: s.filters,
       setFilters: s.setFilters,
       pendingApproval: s.pendingApproval,
+      lastRegion: s.lastRegion,
+      agentAuthority: s.agentAuthority,
+      setAgentAuthority: s.setAgentAuthority,
     })),
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [busyRegion, setBusyRegion] = useState<Region | null>(null);
+  const [resetting, setResetting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useOnClickOutside(menuRef, () => setMenuOpen(false));
+
+  async function loadRegion(demoRegion: Region) {
+    const data = generateDemoData(demoRegion);
+    const { budgets, monthlyIncome } = getDemoProfile(demoRegion);
+    await loadTransactions(data);
+    loadDataset(demoRegion, LOCALE_TO_CURRENCY[REGION_TO_LOCALE[demoRegion]], data, budgets, monthlyIncome);
+    setLocale(REGION_TO_LOCALE[demoRegion] as Locale);
+  }
 
   async function handleLoadDemo(demoRegion: Region) {
     setBusyRegion(demoRegion);
     setMenuOpen(false);
     try {
-      const data = generateDemoData(demoRegion);
-      await loadTransactions(data);
-      loadDataset(demoRegion, LOCALE_TO_CURRENCY[REGION_TO_LOCALE[demoRegion]], data);
-      setLocale(REGION_TO_LOCALE[demoRegion] as Locale);
+      await loadRegion(demoRegion);
     } finally {
       setBusyRegion(null);
+    }
+  }
+
+  async function handleResetDemo() {
+    if (!lastRegion) return;
+    setResetting(true);
+    try {
+      await loadRegion(lastRegion);
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -120,6 +150,34 @@ export function Header({ webmcpStatus }: { webmcpStatus: WebMcpStatus }) {
               </button>
             </div>
           )}
+        </div>
+
+        <button
+          type="button"
+          title={t('nav.resetDemo')}
+          disabled={!lastRegion || resetting}
+          onClick={handleResetDemo}
+          className="hidden items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-xs font-medium text-[var(--color-ink-soft)] transition hover:bg-[var(--color-bg)] disabled:opacity-40 sm:flex"
+        >
+          <RotateCcw size={14} className={resetting ? 'animate-spin' : ''} />
+          {t('nav.resetDemo')}
+        </button>
+
+        <div className="hidden overflow-hidden rounded-md border border-[var(--color-border)] text-xs font-medium sm:flex" title={t(`authority.${agentAuthority}Hint`)}>
+          <button
+            type="button"
+            onClick={() => setAgentAuthority('observe')}
+            className={`px-2.5 py-2 ${agentAuthority === 'observe' ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink-soft)]'}`}
+          >
+            {t('authority.observe')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAgentAuthority('assist')}
+            className={`px-2.5 py-2 ${agentAuthority === 'assist' ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink-soft)]'}`}
+          >
+            {t('authority.assist')}
+          </button>
         </div>
 
         <button

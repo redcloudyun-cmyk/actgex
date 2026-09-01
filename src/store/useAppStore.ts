@@ -8,13 +8,60 @@ import type {
   Transaction,
   TransactionFilter,
 } from '../data/types';
+import { computeBudgetImpact } from '../lib/impact';
+
+export interface BudgetImpact {
+  percentAboveAverage: number;
+  currentMonthlySpend: number;
+  projectedMonthlySpend: number;
+  currentSavings: number | null;
+  projectedSavings: number | null;
+  currentSavingsRate: number | null;
+  projectedSavingsRate: number | null;
+}
 
 export interface PendingApproval {
   activityId: string;
   category: CategoryId;
   currentLimit: number | undefined;
   newLimit: number;
+  impact?: BudgetImpact;
 }
+
+export type MissionStepId = 'load' | 'summarize' | 'compare' | 'flag' | 'recommend' | 'simulate';
+export type MissionStepStatus = 'pending' | 'running' | 'done';
+
+export interface MissionStep {
+  id: MissionStepId;
+  status: MissionStepStatus;
+}
+
+export interface MissionResult {
+  category: CategoryId;
+  flagRatio: number;
+  currentBudget: number | undefined;
+  currentMonthlyAvg: number;
+  recommendedLimit: number;
+  targetMonthlySpend: number;
+  estimatedSavingsPerMonth: number;
+  reductionPercent: number;
+}
+
+export type MissionStatus = 'idle' | 'running' | 'ready' | 'empty';
+
+export interface MissionState {
+  status: MissionStatus;
+  steps: MissionStep[];
+  result: MissionResult | null;
+}
+
+const MISSION_STEP_ORDER: MissionStepId[] = ['load', 'summarize', 'compare', 'flag', 'recommend', 'simulate'];
+
+function freshMissionSteps(): MissionStep[] {
+  return MISSION_STEP_ORDER.map((id) => ({ id, status: 'pending' }));
+}
+
+const initialMission: MissionState = { status: 'idle', steps: freshMissionSteps(), result: null };
 
 const approvalResolvers = new Map<string, (approved: boolean) => void>();
 
@@ -49,17 +96,34 @@ interface AppState {
   budgets: Partial<Record<CategoryId, number>>;
   activity: ActivityEvent[];
   pendingApproval: PendingApproval | null;
+  monthlyIncome: number | null;
+  lastRegion: Region | null;
+  agentAuthority: 'observe' | 'assist';
+  mission: MissionState;
 
   setDbReady: (ready: boolean) => void;
-  loadDataset: (region: Region, currency: string, transactions: Transaction[]) => void;
+  loadDataset: (
+    region: Region,
+    currency: string,
+    transactions: Transaction[],
+    budgets?: Partial<Record<CategoryId, number>>,
+    monthlyIncome?: number | null,
+  ) => void;
   setFilters: (patch: Partial<TransactionFilter>) => void;
   clearFilters: () => void;
   setBudget: (category: CategoryId, limit: number) => void;
+  setAgentAuthority: (v: 'observe' | 'assist') => void;
 
   logActivity: (event: Omit<ActivityEvent, 'id' | 'timestamp'>) => string;
   updateActivity: (id: string, patch: Partial<ActivityEvent>) => void;
   requestBudgetApproval: (activityId: string, category: CategoryId, newLimit: number) => void;
   respondToApproval: (approved: boolean) => void;
+
+  startMission: () => void;
+  setMissionStep: (id: MissionStepId, status: MissionStepStatus) => void;
+  setMissionResult: (result: MissionResult) => void;
+  setMissionEmpty: () => void;
+  resetMission: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -72,19 +136,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   budgets: {},
   activity: [],
   pendingApproval: null,
+  monthlyIncome: null,
+  lastRegion: null,
+  agentAuthority: 'assist',
+  mission: initialMission,
 
   setDbReady: (ready) => set({ dbReady: ready }),
 
-  loadDataset: (region, currency, transactions) =>
+  loadDataset: (region, currency, transactions, budgets = {}, monthlyIncome = null) =>
     set({
       region,
       currency,
       transactions,
       datasetLoaded: true,
       filters: defaultFilter,
-      budgets: {},
+      budgets,
       activity: [],
       pendingApproval: null,
+      monthlyIncome,
+      lastRegion: region,
+      mission: initialMission,
     }),
 
   setFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
@@ -92,6 +163,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setBudget: (category, limit) =>
     set((s) => ({ budgets: { ...s.budgets, [category]: limit } })),
+
+  setAgentAuthority: (v) => set({ agentAuthority: v }),
 
   logActivity: (event) => {
     const id = `evt-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
@@ -106,14 +179,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
 
   requestBudgetApproval: (activityId, category, newLimit) =>
-    set((s) => ({
-      pendingApproval: {
-        activityId,
-        category,
-        currentLimit: s.budgets[category],
-        newLimit,
-      },
-    })),
+    set((s) => {
+      const result = s.mission.result;
+      const impact =
+        result && result.category === category
+          ? computeBudgetImpact(s.transactions, s.monthlyIncome, result)
+          : undefined;
+      return {
+        pendingApproval: {
+          activityId,
+          category,
+          currentLimit: s.budgets[category],
+          newLimit,
+          impact,
+        },
+      };
+    }),
 
   respondToApproval: (approved) => {
     const pending = get().pendingApproval;
@@ -121,6 +202,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     settleApproval(pending.activityId, approved);
     set({ pendingApproval: null });
   },
+
+  startMission: () => set({ mission: { status: 'running', steps: freshMissionSteps(), result: null } }),
+
+  setMissionStep: (id, status) =>
+    set((s) => ({
+      mission: { ...s.mission, steps: s.mission.steps.map((step) => (step.id === id ? { ...step, status } : step)) },
+    })),
+
+  setMissionResult: (result) =>
+    set((s) => ({ mission: { ...s.mission, status: 'ready', result } })),
+
+  setMissionEmpty: () => set((s) => ({ mission: { ...s.mission, status: 'empty', result: null } })),
+
+  resetMission: () => set({ mission: initialMission }),
 }));
 
 export function activityStatus(id: string, status: ToolStatus, extra?: Partial<ActivityEvent>) {

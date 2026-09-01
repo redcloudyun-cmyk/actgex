@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ActivityTimeline } from './components/ActivityTimeline';
 import { AgentConsole } from './components/AgentConsole';
+import { AgentContextPanel } from './components/AgentContextPanel';
+import { AgentMissionPanel } from './components/AgentMissionPanel';
 import { ApprovalDialog } from './components/ApprovalDialog';
 import { BudgetPanel } from './components/BudgetPanel';
 import { CategoryChart } from './components/CategoryChart';
+import { FinancialSummaryStrip } from './components/FinancialSummaryStrip';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { KpiCards } from './components/KpiCards';
@@ -65,8 +68,11 @@ function App() {
           <div className="mx-auto max-w-[1400px] space-y-4 p-4 sm:p-5">
             <Hero docsUrl={REPO_URL} />
 
+            <AgentMissionPanel />
+
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
               <div className="space-y-4">
+                <FinancialSummaryStrip />
                 <KpiCards />
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <SpendingChart />
@@ -81,9 +87,10 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:h-[calc(100vh-96px)]">
+              <div className="flex flex-col gap-4 overflow-y-auto xl:sticky xl:top-4 xl:h-[calc(100vh-96px)]">
+                <AgentContextPanel />
                 <TopToolsPanel />
-                <div id="executions" className="min-h-0 flex-1 scroll-mt-20">
+                <div id="executions" className="min-h-[260px] flex-1 scroll-mt-20">
                   <ActivityTimeline />
                 </div>
                 <div id="agents" className="scroll-mt-20">
