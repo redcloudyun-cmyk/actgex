@@ -83,6 +83,18 @@ export function summarizeEvent(event: ActivityEvent, t: T, locale: Locale, curre
       return t('summary.exported', { format: String(after.format) });
     }
 
+    case 'demo_query':
+      return t('summary.demoQueried');
+
+    case 'demo_compare':
+      return t('summary.demoCompared');
+
+    case 'demo_flag':
+      return t('summary.demoFlagged');
+
+    case 'demo_review':
+      return t('summary.demoReviewed');
+
     default:
       return '';
   }

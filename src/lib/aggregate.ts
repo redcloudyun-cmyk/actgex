@@ -1,5 +1,5 @@
 import type { CategoryId, Transaction, TransactionFilter } from '../data/types';
-import { calendarMonthRange } from './dates';
+import { calendarMonthRange, DEMO_REFERENCE_DATE } from './dates';
 
 export function filterTransactions(transactions: Transaction[], filters: TransactionFilter): Transaction[] {
   return transactions.filter((t) => {
@@ -48,13 +48,18 @@ export function totalsByDay(transactions: Transaction[]): DayTotal[] {
 }
 
 /** Last `days` daily totals (zero-filled), optionally restricted to one category — for sparklines. */
-export function recentDailySeries(transactions: Transaction[], days: number, category?: CategoryId): number[] {
+export function recentDailySeries(
+  transactions: Transaction[],
+  days: number,
+  category?: CategoryId,
+  referenceDate: Date = DEMO_REFERENCE_DATE,
+): number[] {
   const scoped = category ? transactions.filter((t) => t.category === category) : transactions;
   const byDay = new Map<string, number>();
   for (const t of scoped) byDay.set(t.date, (byDay.get(t.date) ?? 0) + t.amount);
 
   const series: number[] = [];
-  const cursor = new Date();
+  const cursor = referenceDate;
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(cursor);
     d.setDate(d.getDate() - i);
@@ -64,9 +69,12 @@ export function recentDailySeries(transactions: Transaction[], days: number, cat
   return series;
 }
 
-export function monthlyChange(transactions: Transaction[]): { change: number; percent: number } {
-  const [curStart, curEnd] = calendarMonthRange(0);
-  const [prevStart, prevEnd] = calendarMonthRange(1);
+export function monthlyChange(
+  transactions: Transaction[],
+  referenceDate: Date = DEMO_REFERENCE_DATE,
+): { change: number; percent: number } {
+  const [curStart, curEnd] = calendarMonthRange(0, referenceDate);
+  const [prevStart, prevEnd] = calendarMonthRange(1, referenceDate);
   const current = sumAmount(transactions.filter((t) => t.date >= curStart && t.date <= curEnd));
   const previous = sumAmount(transactions.filter((t) => t.date >= prevStart && t.date <= prevEnd));
   const change = current - previous;

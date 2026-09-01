@@ -1,5 +1,5 @@
 import type { CategoryId, Region, Transaction } from './types';
-import { calendarMonthRange } from '../lib/dates';
+import { calendarMonthRange, DEMO_REFERENCE_DATE } from '../lib/dates';
 
 function mulberry32(seed: number) {
   let a = seed;
@@ -91,6 +91,7 @@ const US_PROFILE: RegionProfile = {
     { merchant: 'T-Mobile', amount: 65, dayOfMonth: 15 },
   ],
   fixedCosts: [
+    { merchant: 'Room Rent (Shared Apartment)', category: 'OTHER', amount: 720, dayOfMonth: 1 },
     { merchant: 'Auto Loan', category: 'TRANSPORT', amount: 420, dayOfMonth: 1 },
     { merchant: 'Health Insurance', category: 'HEALTH', amount: 310, dayOfMonth: 1 },
     { merchant: 'Auto Insurance', category: 'TRANSPORT', amount: 145, dayOfMonth: 1 },
@@ -163,6 +164,7 @@ const KR_PROFILE: RegionProfile = {
     { merchant: 'SK텔레콤', amount: 62000, dayOfMonth: 15 },
   ],
   fixedCosts: [
+    { merchant: '월세 (룸메이트 분담)', category: 'OTHER', amount: 760000, dayOfMonth: 1 },
     { merchant: '자동차 할부', category: 'TRANSPORT', amount: 430000, dayOfMonth: 1 },
     { merchant: '건강보험', category: 'HEALTH', amount: 270000, dayOfMonth: 1 },
     { merchant: '자동차 보험', category: 'TRANSPORT', amount: 160000, dayOfMonth: 1 },
@@ -202,7 +204,7 @@ export function getDemoProfile(region: Region): { budgets: Partial<Record<Catego
   return { budgets: { ...profile.budgets }, monthlyIncome: profile.monthlyIncome };
 }
 
-export function generateDemoData(region: Region, referenceDate: Date = new Date()): Transaction[] {
+export function generateDemoData(region: Region, referenceDate: Date = DEMO_REFERENCE_DATE): Transaction[] {
   const profile = region === 'US' ? US_PROFILE : KR_PROFILE;
   const rng = mulberry32(region === 'US' ? 20260901 : 20260902);
   const days = 182;
@@ -236,8 +238,11 @@ export function generateDemoData(region: Region, referenceDate: Date = new Date(
       if (cat === 'DINING' && isRecent) freq *= 1.05; // slightly more frequent dining this month
       if (rng() < freq) {
         const [lo, hi] = p.amountRange;
-        let amount = lo + rng() * (hi - lo);
-        if (cat === 'DINING' && isRecent) amount *= 1.25; // pricier dining this month, ~30% combined
+        // Individual amounts always stay within the category's natural range
+        // — the +29% dining MoM story is shaped entirely below by the pin
+        // (a capped scale plus a handful of extra normal-sized transactions),
+        // never by inflating one transaction's amount.
+        const amount = lo + rng() * (hi - lo);
         transactions.push({
           id: `${region}-${counter++}`,
           date: iso,
@@ -327,9 +332,36 @@ export function generateDemoData(region: Region, referenceDate: Date = new Date(
     .filter((i) => transactions[i].category === 'DINING' && transactions[i].date >= curMonthStart && transactions[i].date <= curMonthEnd);
   const curDiningTotal = curDiningIndexes.reduce((sum, i) => sum + transactions[i].amount, 0);
   if (prevDiningTotal > 0 && curDiningTotal > 0) {
-    const scale = (prevDiningTotal * 1.29) / curDiningTotal;
+    const targetTotal = prevDiningTotal * 1.29;
+    // Never scale existing dining transactions above their natural amount —
+    // a single $455 "dinner" reads as an obvious fake to anyone skimming the
+    // transaction table. The entire +29% delta is made up with a few extra
+    // normal-sized dining transactions instead, below.
+    const scale = Math.min(targetTotal / curDiningTotal, 1);
     for (const i of curDiningIndexes) {
       transactions[i] = { ...transactions[i], amount: round(transactions[i].amount * scale, profile.currency) };
+    }
+
+    const achievedTotal = curDiningTotal * scale;
+    let shortfall = targetTotal - achievedTotal;
+    if (shortfall > 0) {
+      const [lo, hi] = profile.categories.DINING.amountRange;
+      const curMonthStartDate = new Date(`${curMonthStart}T00:00:00Z`);
+      let guard = 0;
+      while (shortfall > lo * 0.5 && guard < 100) {
+        guard++;
+        const amount = Math.min(shortfall, lo + rng() * (hi - lo));
+        const day = 1 + Math.floor(rng() * 27);
+        const date = new Date(Date.UTC(curMonthStartDate.getUTCFullYear(), curMonthStartDate.getUTCMonth(), day));
+        transactions.push({
+          id: `${region}-${counter++}`,
+          date: isoDate(date),
+          merchant: pick(rng, profile.categories.DINING.merchants),
+          category: 'DINING',
+          amount: round(amount, profile.currency),
+        });
+        shortfall -= amount;
+      }
     }
   }
 

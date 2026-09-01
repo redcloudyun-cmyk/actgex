@@ -47,7 +47,7 @@ export type ToolStatus =
   | 'COMPLETED'
   | 'FAILED';
 
-export type ActivitySource = 'webmcp' | 'console';
+export type ActivitySource = 'webmcp' | 'console' | 'seed';
 
 export interface ActivityEvent {
   id: string;

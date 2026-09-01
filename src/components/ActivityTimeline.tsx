@@ -42,6 +42,12 @@ function formatTime(ts: number, intlLocale: string) {
   );
 }
 
+const SOURCE_KEY: Record<ActivityEvent['source'], string> = {
+  webmcp: 'agent.source.webmcp',
+  console: 'agent.source.console',
+  seed: 'agent.source.seed',
+};
+
 function EventRow({ event }: { event: ActivityEvent }) {
   const { t, locale } = useI18n();
   const currency = useAppStore((s) => s.currency);
@@ -67,16 +73,15 @@ function EventRow({ event }: { event: ActivityEvent }) {
       <div className="flex-1 rounded-lg border border-[var(--color-border)] px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <span className="font-medium text-[var(--color-ink)]">
-            {event.actor === 'agent' ? '🤖' : '🧑'} {t('agent.toolCall', { tool: t(`tool.${event.tool}`) })}
+            {event.actor === 'agent' ? '🤖' : '🧑'}{' '}
+            {t(event.actor === 'agent' ? 'agent.toolCall' : 'human.toolCall', { tool: t(`tool.${event.tool}`) })}
           </span>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_TONE[event.status]}`}>
             {t(`agent.status.${event.status}`)}
           </span>
         </div>
         {summary && <div className="mt-1 text-[var(--color-ink-soft)]">{summary}</div>}
-        <div className="mt-1 text-[10px] text-[var(--color-ink-soft)]/70">
-          {t(event.source === 'webmcp' ? 'agent.source.webmcp' : 'agent.source.console')}
-        </div>
+        <div className="mt-1 text-[10px] text-[var(--color-ink-soft)]/70">{t(SOURCE_KEY[event.source])}</div>
       </div>
     </div>
   );

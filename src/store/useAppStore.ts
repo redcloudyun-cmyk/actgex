@@ -86,6 +86,26 @@ const defaultFilter: TransactionFilter = {
   search: '',
 };
 
+/**
+ * A few pre-populated timeline entries so the Activity panel isn't empty on
+ * first load. Uses synthetic `demo_*` tool ids (not the real WebMCP tools)
+ * so `source: 'seed'` clearly reads as "Demo history", never "via WebMCP".
+ */
+function seedActivity(): ActivityEvent[] {
+  const now = Date.now();
+  const base = (offsetMinutes: number, patch: Omit<ActivityEvent, 'id' | 'timestamp'>): ActivityEvent => ({
+    ...patch,
+    id: `seed-${offsetMinutes}`,
+    timestamp: now - offsetMinutes * 60000,
+  });
+  return [
+    base(4, { actor: 'agent', source: 'seed', tool: 'demo_query', status: 'COMPLETED' }),
+    base(3, { actor: 'agent', source: 'seed', tool: 'demo_compare', status: 'COMPLETED' }),
+    base(2, { actor: 'agent', source: 'seed', tool: 'demo_flag', status: 'COMPLETED' }),
+    base(1, { actor: 'user', source: 'seed', tool: 'demo_review', status: 'COMPLETED' }),
+  ];
+}
+
 interface AppState {
   region: Region | null;
   currency: string;
@@ -151,7 +171,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       datasetLoaded: true,
       filters: defaultFilter,
       budgets,
-      activity: [],
+      activity: seedActivity(),
       pendingApproval: null,
       monthlyIncome,
       lastRegion: region,

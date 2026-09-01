@@ -1,3 +1,4 @@
+import { DEMO_REFERENCE_DATE } from '../lib/dates';
 import { useAppStore } from '../store/useAppStore';
 import { toolInvokers } from './registerTools';
 
@@ -43,7 +44,7 @@ async function runRecommendAndApply() {
 }
 
 async function runSimulate() {
-  const monthsRemaining = Math.max(1, 12 - new Date().getMonth());
+  const monthsRemaining = Math.max(1, 12 - DEMO_REFERENCE_DATE.getUTCMonth());
   await toolInvokers.simulate_budget_change({
     category: 'DINING',
     reductionPercent: 20,

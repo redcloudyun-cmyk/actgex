@@ -163,6 +163,17 @@ const en = {
   'status.webmcpFailed': 'WebMCP registration failed',
   'agent.source.webmcp': 'via WebMCP',
   'agent.source.console': 'via Demo Console',
+  'agent.source.seed': 'Demo history',
+  'human.toolCall': 'Human → {{tool}}',
+
+  'tool.demo_query': 'Query transactions',
+  'tool.demo_compare': 'Compare spending periods',
+  'tool.demo_flag': 'Flag unusual spending',
+  'tool.demo_review': 'Review recommendation',
+  'summary.demoQueried': 'Queried this month’s transactions',
+  'summary.demoCompared': 'Compared this month with last month',
+  'summary.demoFlagged': 'Flagged Dining as unusual spending',
+  'summary.demoReviewed': 'Reviewed a previous recommendation',
 
   'common.loading': 'Loading…',
   'common.close': 'Close',
@@ -247,6 +258,11 @@ const en = {
   'authority.assist': 'Assist',
   'authority.observeHint': 'Observe: the agent can read and analyze your data only — no changes can be proposed.',
   'authority.assistHint': 'Assist: analysis and simulations run automatically. Financial changes still require your approval.',
+
+  'settings.title': 'Settings',
+  'settings.subtitle': 'Preferences for how the agent behaves and how the app is displayed.',
+  'settings.language': 'Language',
+  'settings.authority': 'Agent Authority',
 };
 
 export default en;

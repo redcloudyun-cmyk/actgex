@@ -165,6 +165,17 @@ const ko: Dictionary = {
   'status.webmcpFailed': 'WebMCP 등록 실패',
   'agent.source.webmcp': 'WebMCP 경유',
   'agent.source.console': '데모 콘솔 경유',
+  'agent.source.seed': '데모 기록',
+  'human.toolCall': '사람 → {{tool}}',
+
+  'tool.demo_query': '거래 내역 조회',
+  'tool.demo_compare': '기간별 지출 비교',
+  'tool.demo_flag': '이상 지출 탐지',
+  'tool.demo_review': '추천안 검토',
+  'summary.demoQueried': '이번 달 거래 내역을 조회했습니다',
+  'summary.demoCompared': '이번 달과 지난달을 비교했습니다',
+  'summary.demoFlagged': '외식비를 이상 지출로 표시했습니다',
+  'summary.demoReviewed': '이전 추천안을 검토했습니다',
 
   'common.loading': '불러오는 중…',
   'common.close': '닫기',
@@ -249,6 +260,11 @@ const ko: Dictionary = {
   'authority.assist': '어시스트',
   'authority.observeHint': '관찰: 에이전트는 데이터를 읽고 분석만 할 수 있습니다 — 변경을 제안할 수 없습니다.',
   'authority.assistHint': '어시스트: 분석과 시뮬레이션은 자동으로 실행됩니다. 실제 재정 변경은 여전히 사용자 승인이 필요합니다.',
+
+  'settings.title': '설정',
+  'settings.subtitle': '에이전트 동작 방식과 화면 표시 방식을 설정합니다.',
+  'settings.language': '언어',
+  'settings.authority': '에이전트 권한',
 };
 
 export default ko;

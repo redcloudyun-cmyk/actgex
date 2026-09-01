@@ -1,9 +1,10 @@
 import type { CategoryId } from '../data/types';
+import { DEMO_REFERENCE_DATE } from '../lib/dates';
 import { useAppStore, type MissionStepId } from '../store/useAppStore';
 import { toolInvokers } from './registerTools';
 
 function monthsRemainingThisYear(): number {
-  return Math.max(1, 12 - new Date().getMonth());
+  return Math.max(1, 12 - DEMO_REFERENCE_DATE.getUTCMonth());
 }
 
 function mark(id: MissionStepId, status: 'running' | 'done') {

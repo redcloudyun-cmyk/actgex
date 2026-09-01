@@ -10,6 +10,7 @@ import { FinancialSummaryStrip } from './components/FinancialSummaryStrip';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { KpiCards } from './components/KpiCards';
+import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { SpendingChart } from './components/SpendingChart';
 import { ToolsReference } from './components/ToolsReference';
@@ -85,6 +86,7 @@ function App() {
                 <div id="approvals" className="scroll-mt-20">
                   <BudgetPanel />
                 </div>
+                <SettingsPanel />
               </div>
 
               <div className="flex flex-col gap-4 overflow-y-auto xl:sticky xl:top-4 xl:h-[calc(100vh-96px)]">
