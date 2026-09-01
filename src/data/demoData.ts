@@ -18,6 +18,13 @@ interface CategoryProfile {
   amountRange: [number, number];
 }
 
+interface FixedCost {
+  merchant: string;
+  category: CategoryId;
+  amount: number;
+  dayOfMonth: number;
+}
+
 interface RegionProfile {
   currency: string;
   categories: Record<
@@ -26,6 +33,8 @@ interface RegionProfile {
   >;
   subscriptions: { merchant: string; amount: number; dayOfMonth: number }[];
   utilities: { merchant: string; amount: number; dayOfMonth: number }[];
+  /** Stable monthly obligations (rent, loans, insurance) — keeps the dashboard realistic even on day 1 of a month, and never becomes the anomaly story. */
+  fixedCosts: FixedCost[];
   travel: { merchants: string[]; amountRange: [number, number] };
   monthlyIncome: number;
   budgets: Partial<Record<CategoryId, number>>;
@@ -81,16 +90,27 @@ const US_PROFILE: RegionProfile = {
     { merchant: 'Comcast', amount: 79, dayOfMonth: 9 },
     { merchant: 'T-Mobile', amount: 65, dayOfMonth: 15 },
   ],
+  fixedCosts: [
+    { merchant: 'Apartment Rent', category: 'OTHER', amount: 1950, dayOfMonth: 1 },
+    { merchant: 'Auto Loan', category: 'TRANSPORT', amount: 460, dayOfMonth: 1 },
+    { merchant: 'Health Insurance', category: 'HEALTH', amount: 420, dayOfMonth: 1 },
+    { merchant: 'Student Loan', category: 'OTHER', amount: 380, dayOfMonth: 1 },
+    { merchant: 'Auto Insurance', category: 'OTHER', amount: 190, dayOfMonth: 1 },
+  ],
   travel: {
     merchants: ['Delta Air Lines', 'Marriott', 'Airbnb'],
     amountRange: [180, 950],
   },
-  monthlyIncome: 6000,
+  monthlyIncome: 5200,
   budgets: {
     DINING: 650,
-    GROCERY: 400,
-    SHOPPING: 300,
-    TRANSPORT: 150,
+    GROCERY: 520,
+    SHOPPING: 420,
+    TRANSPORT: 850,
+    ENTERTAINMENT: 220,
+    HEALTH: 650,
+    SUBSCRIPTION: 120,
+    UTILITIES: 300,
   },
 };
 
@@ -143,16 +163,28 @@ const KR_PROFILE: RegionProfile = {
     { merchant: 'KT', amount: 55000, dayOfMonth: 9 },
     { merchant: 'SK텔레콤', amount: 62000, dayOfMonth: 15 },
   ],
+  fixedCosts: [
+    { merchant: '월세', category: 'OTHER', amount: 1600000, dayOfMonth: 1 },
+    { merchant: '자동차 할부', category: 'TRANSPORT', amount: 550000, dayOfMonth: 1 },
+    { merchant: '건강보험', category: 'HEALTH', amount: 350000, dayOfMonth: 1 },
+    { merchant: '학자금 상환', category: 'OTHER', amount: 450000, dayOfMonth: 1 },
+    { merchant: '자동차 보험', category: 'OTHER', amount: 220000, dayOfMonth: 1 },
+    { merchant: '전세대출 상환', category: 'OTHER', amount: 850000, dayOfMonth: 1 },
+  ],
   travel: {
     merchants: ['대한항공', '여기어때', '에어비앤비'],
     amountRange: [150000, 900000],
   },
-  monthlyIncome: 7000000,
+  monthlyIncome: 6200000,
   budgets: {
     DINING: 750000,
-    GROCERY: 450000,
-    SHOPPING: 350000,
-    TRANSPORT: 180000,
+    GROCERY: 550000,
+    SHOPPING: 450000,
+    TRANSPORT: 900000,
+    ENTERTAINMENT: 250000,
+    HEALTH: 650000,
+    SUBSCRIPTION: 80000,
+    UTILITIES: 250000,
   },
 };
 
@@ -176,7 +208,7 @@ export function getDemoProfile(region: Region): { budgets: Partial<Record<Catego
 
 export function generateDemoData(region: Region, referenceDate: Date = new Date()): Transaction[] {
   const profile = region === 'US' ? US_PROFILE : KR_PROFILE;
-  const rng = mulberry32(region === 'US' ? 20260830 : 20260831);
+  const rng = mulberry32(region === 'US' ? 20260901 : 20260902);
   const days = 182;
   const start = new Date(referenceDate);
   start.setDate(start.getDate() - days);
@@ -220,6 +252,18 @@ export function generateDemoData(region: Region, referenceDate: Date = new Date(
       }
     });
 
+    for (const fixed of profile.fixedCosts) {
+      if (dayOfMonth === fixed.dayOfMonth) {
+        transactions.push({
+          id: `${region}-${counter++}`,
+          date: iso,
+          merchant: fixed.merchant,
+          category: fixed.category,
+          amount: fixed.amount,
+        });
+      }
+    }
+
     for (const sub of profile.subscriptions) {
       if (dayOfMonth === sub.dayOfMonth) {
         transactions.push({
@@ -262,6 +306,23 @@ export function generateDemoData(region: Region, referenceDate: Date = new Date(
   // day of the month the app happens to be viewed on.
   const [curMonthStart, curMonthEnd] = calendarMonthRange(0, referenceDate);
   const [prevMonthStart, prevMonthEnd] = calendarMonthRange(1, referenceDate);
+
+  // On early-month demo dates (e.g. the 1st), randomness can otherwise leave
+  // zero Dining rows in the new month, making current monthly spend look
+  // misleadingly close to zero. Guarantee at least one.
+  const hasCurrentDining = transactions.some(
+    (t) => t.category === 'DINING' && t.date >= curMonthStart && t.date <= curMonthEnd,
+  );
+  if (!hasCurrentDining) {
+    transactions.push({
+      id: `${region}-${counter++}`,
+      date: isoDate(referenceDate),
+      merchant: region === 'US' ? 'Local Bistro' : '배달의민족',
+      category: 'DINING',
+      amount: region === 'US' ? 42 : 42000,
+    });
+  }
+
   const prevDiningTotal = transactions
     .filter((t) => t.category === 'DINING' && t.date >= prevMonthStart && t.date <= prevMonthEnd)
     .reduce((sum, t) => sum + t.amount, 0);
@@ -352,13 +413,35 @@ export function generateDemoData(region: Region, referenceDate: Date = new Date(
     const diningRatio = diningBaselineAvgMonthly > 0 ? diningRecent / diningBaselineAvgMonthly : Infinity;
     const MODEST_TARGET = 1.35;
     if (diningRatio < MODEST_TARGET && diningRecent > 0 && diningBaselineAvgMonthly > 0) {
-      const targetRecent = diningBaselineAvgMonthly * MODEST_TARGET;
-      const scale = targetRecent / diningRecent;
-      const diningRecentIndexes = transactions
-        .map((_, i) => i)
-        .filter((i) => transactions[i].category === 'DINING' && transactions[i].date >= flagRecentStart);
-      for (const i of diningRecentIndexes) {
-        transactions[i] = { ...transactions[i], amount: round(transactions[i].amount * scale, profile.currency) };
+      // Never rescale dining's *recent* window here, nor any baseline data
+      // that falls within "last month" — both feed the MoM pin above
+      // (directly, or via prevDiningTotal, which the pin already used as its
+      // anchor). Re-touching either after the pin already ran would silently
+      // move the pinned ~29% MoM ratio (this bit the project twice already:
+      // once via the recent window, turning 29% into 41%). The only lever
+      // that can't disturb it is the *older* two-thirds of the baseline —
+      // strictly before "last month" starts.
+      let safeBaselineTotal = 0;
+      const safeBaselineIndexes: number[] = [];
+      for (let i = 0; i < transactions.length; i++) {
+        const t = transactions[i];
+        if (t.category === 'DINING' && t.date >= flagBaselineStart && t.date < prevMonthStart) {
+          safeBaselineTotal += t.amount;
+          safeBaselineIndexes.push(i);
+        }
+      }
+      let lastMonthBaselinePortion = 0; // [prevMonthStart, flagRecentStart) — part of "last month", never touched
+      for (const t of transactions) {
+        if (t.category === 'DINING' && t.date >= prevMonthStart && t.date < flagRecentStart) {
+          lastMonthBaselinePortion += t.amount;
+        }
+      }
+      const maxAllowedSafeTotal = Math.max(0, (3 * diningRecent) / MODEST_TARGET - lastMonthBaselinePortion);
+      if (safeBaselineTotal > maxAllowedSafeTotal) {
+        const scale = safeBaselineTotal > 0 ? maxAllowedSafeTotal / safeBaselineTotal : 0;
+        for (const i of safeBaselineIndexes) {
+          transactions[i] = { ...transactions[i], amount: round(transactions[i].amount * scale, profile.currency) };
+        }
       }
     }
   }
