@@ -26,14 +26,22 @@ const SETTINGS_ITEM = { key: 'nav.settings', href: '#settings', icon: SettingsIc
 
 // #agents and #executions live inside the sticky right column, which
 // scrolls independently of <main> — their on-screen position barely moves
-// as the page scrolls, so they can't be tracked by scroll position at all.
-// Everything else follows the normal top-to-bottom reading flow.
+// as the page scrolls, so scroll position can never confirm or correct a
+// click on them. Everything else follows the normal top-to-bottom flow, but
+// even those can rest at an ambiguous scroll position after a click: on a
+// short page multiple sections are simultaneously visible in one viewport,
+// and a target close enough to the bottom gets its scroll clamped to the
+// document's actual max — which used to make the "at bottom" special case
+// below (mis)fire for whatever was clicked, not just genuine end-of-page
+// scrolling. So every link is click-pinned the same way; only real,
+// continued scrolling (not a click's own resulting jump) hands control
+// back to position-based tracking.
 const STICKY_COLUMN_IDS = new Set(['agents', 'executions']);
 const MAIN_FLOW_IDS = [...ITEMS.map((item) => item.href.slice(1)), SETTINGS_ITEM.href.slice(1)].filter(
   (id) => !STICKY_COLUMN_IDS.has(id),
 );
 
-const PIN_COOLDOWN_MS = 700; // long enough for a clicked anchor's smooth-scroll jump to finish
+const PIN_COOLDOWN_MS = 500; // long enough to swallow the scroll event(s) a clicked anchor's own jump fires
 
 /**
  * Highlights whichever section is currently in view, instead of always
@@ -47,9 +55,15 @@ const PIN_COOLDOWN_MS = 700; // long enough for a clicked anchor's smooth-scroll
  * whatever positioned ancestor is instead), so they stay correct regardless
  * of current scroll position.
  *
- * `pin(id)` lets a click on a sticky-column link (#agents/#executions, which
- * can't be tracked by scroll position) force that item active immediately;
- * normal scroll-tracking resumes on the next real scroll after the jump.
+ * `pin(id)` makes a clicked link active immediately and ignores the
+ * scroll-position recompute for a short cooldown, so the click's own
+ * resulting jump (a real scroll event) can't immediately second-guess it.
+ * There's deliberately no forced recompute once the cooldown ends — on a
+ * short page that would just re-introduce the ambiguity a click was meant
+ * to resolve in the first place. The pin simply holds until the next click,
+ * or until the user's own continued scrolling produces a fresh scroll event
+ * after the cooldown window (which needs no special handling — it's just
+ * the normal scroll listener, running again).
  */
 function useScrollSpy(mainFlowIds: string[]): [string, (id: string) => void] {
   const [activeId, setActiveId] = useState(mainFlowIds[0]);
@@ -125,7 +139,7 @@ export function Sidebar({ docsUrl }: { docsUrl: string }) {
             <a
               key={key}
               href={href}
-              onClick={STICKY_COLUMN_IDS.has(id) ? () => pin(id) : undefined}
+              onClick={() => pin(id)}
               className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
                 activeId === id
                   ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
@@ -151,6 +165,7 @@ export function Sidebar({ docsUrl }: { docsUrl: string }) {
         </a>
         <a
           href={SETTINGS_ITEM.href}
+          onClick={() => pin(SETTINGS_ITEM.href.slice(1))}
           className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
             activeId === SETTINGS_ITEM.href.slice(1)
               ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
