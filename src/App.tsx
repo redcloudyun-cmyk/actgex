@@ -10,6 +10,7 @@ import { FinancialSummaryStrip } from './components/FinancialSummaryStrip';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { KpiCards } from './components/KpiCards';
+import { RecentDecisions } from './components/RecentDecisions';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { SpendingChart } from './components/SpendingChart';
@@ -18,11 +19,13 @@ import { TopToolsPanel } from './components/TopToolsPanel';
 import { TransactionTable } from './components/TransactionTable';
 import { REPO_URL } from './config';
 import { getDb } from './db/duckdb';
+import { useI18n } from './i18n';
 import { useAppStore } from './store/useAppStore';
 import { isWebMcpAvailable, registerWebMcpTools } from './webmcp/registerTools';
 import type { WebMcpStatus } from './webmcp/status';
 
 function App() {
+  const { t } = useI18n();
   const setDbReady = useAppStore((s) => s.setDbReady);
   const [webmcpStatus, setWebmcpStatus] = useState<WebMcpStatus>('UNAVAILABLE');
 
@@ -80,12 +83,26 @@ function App() {
                   <CategoryChart />
                 </div>
                 <ToolsReference />
-                <div id="shared-state" className="scroll-mt-20">
+
+                <section id="shared-state" className="scroll-mt-20 space-y-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-[var(--color-ink)]">{t('nav.sharedState')}</h2>
+                    <p className="max-w-2xl text-[11px] text-[var(--color-ink-soft)]">{t('sharedState.description')}</p>
+                  </div>
                   <TransactionTable />
-                </div>
-                <div id="approvals" className="scroll-mt-20">
+                </section>
+
+                <section id="approvals" className="scroll-mt-20 space-y-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-[var(--color-ink)]">{t('nav.approvals')}</h2>
+                    <p className="max-w-2xl text-[11px] text-[var(--color-ink-soft)]">{t('approvals.description')}</p>
+                  </div>
                   <BudgetPanel />
-                </div>
+                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                    <RecentDecisions />
+                  </div>
+                </section>
+
                 <SettingsPanel />
               </div>
 

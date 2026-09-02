@@ -263,6 +263,12 @@ const en = {
   'settings.subtitle': 'Preferences for how the agent behaves and how the app is displayed.',
   'settings.language': 'Language',
   'settings.authority': 'Agent Authority',
+
+  'sharedState.description':
+    'The live financial data shared between you and the agent — the same transactions and filters both of you are looking at.',
+  'approvals.description': 'Budget goals you control directly, and every change the agent has proposed.',
+  'approvals.recentDecisions': 'Recent Decisions',
+  'approvals.noDecisions': 'No budget decisions yet.',
 };
 
 export default en;

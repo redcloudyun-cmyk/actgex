@@ -265,6 +265,11 @@ const ko: Dictionary = {
   'settings.subtitle': '에이전트 동작 방식과 화면 표시 방식을 설정합니다.',
   'settings.language': '언어',
   'settings.authority': '에이전트 권한',
+
+  'sharedState.description': '당신과 에이전트가 함께 보는 실시간 금융 데이터 — 동일한 거래 내역과 필터를 공유합니다.',
+  'approvals.description': '직접 관리하는 예산 목표와, 에이전트가 제안한 모든 변경 내역입니다.',
+  'approvals.recentDecisions': '최근 결정',
+  'approvals.noDecisions': '아직 예산 관련 결정이 없습니다.',
 };
 
 export default ko;
